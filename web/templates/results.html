@@ -1,0 +1,99 @@
+{{define "results.html"}}
+{{$a := .Assessment}}
+{{$p := .Profile}}
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    .print-card { box-shadow: none !important; border: 1px solid #94a3b8 !important; }
+  }
+</style>
+
+<div class="space-y-6">
+
+  {{if eq $a.Verdict.Verdict "Borrow"}}
+    <div class="rounded-xl p-5 bg-emerald-50 border border-emerald-200">
+      <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Verdict &middot; Borrow</p>
+      <p class="mt-1 text-emerald-900">{{$a.Verdict.Justification}}</p>
+    </div>
+  {{else if eq $a.Verdict.Verdict "Borrow less"}}
+    <div class="rounded-xl p-5 bg-amber-50 border border-amber-200">
+      <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Verdict &middot; Borrow less</p>
+      <p class="mt-1 text-amber-900">{{$a.Verdict.Justification}}</p>
+    </div>
+  {{else}}
+    <div class="rounded-xl p-5 bg-red-50 border border-red-200">
+      <p class="text-xs font-semibold uppercase tracking-wide text-red-700">Verdict &middot; Don't borrow</p>
+      <p class="mt-1 text-red-900">{{$a.Verdict.Justification}}</p>
+    </div>
+  {{end}}
+
+  {{if eq $a.Confidence "low"}}
+  <div class="rounded-lg p-3 bg-slate-100 border border-slate-200 text-sm text-slate-600 no-print">
+    <span class="font-semibold">Low confidence:</span> {{$a.ConfidenceNote}}
+  </div>
+  {{end}}
+
+  {{if $a.Routed}}
+  <div class="rounded-lg p-4 bg-sky-50 border border-sky-200 text-sky-900">
+    <p class="font-semibold text-sm">Recommended product: {{$a.RecommendedProduct}}</p>
+    <p class="text-sm mt-1">{{$a.RoutingReason}}</p>
+  </div>
+  {{end}}
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Maximum amount</p>
+      <p class="mt-2 text-2xl font-bold">₹{{inr $a.MaxAmount.SafeCapacityLimit}}</p>
+      <p class="text-xs text-slate-500">Safe Capacity Limit</p>
+      <p class="text-sm text-slate-600 mt-2">{{$a.MaxAmount.SafeCapacityJustification}}</p>
+      <hr class="my-3 border-slate-100">
+      <p class="text-lg font-semibold text-slate-700">₹{{inr $a.MaxAmount.SanctionLimit}}</p>
+      <p class="text-xs text-slate-500">Sanction Limit (what a bank will likely approve)</p>
+      <p class="text-sm text-slate-600 mt-2">{{$a.MaxAmount.SanctionJustification}}</p>
+      <p class="text-sm mt-3 font-medium text-slate-800">Use: the {{$a.MaxAmount.Recommended}}. {{$a.MaxAmount.RecommendationReason}}</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Fair interest rate</p>
+      <p class="mt-2 text-2xl font-bold">{{printf "%.1f" $a.InterestRate.LowPercent}}% - {{printf "%.1f" $a.InterestRate.HighPercent}}%</p>
+      {{if $a.InterestRate.Wide}}<p class="text-xs text-amber-600">Widened for missing information</p>{{end}}
+      <p class="text-sm text-slate-600 mt-2">{{$a.InterestRate.BandJustification}}</p>
+      <hr class="my-3 border-slate-100">
+      <p class="text-lg font-semibold text-slate-700">{{printf "%.1f" $a.InterestRate.AllInAPR}}% all-in APR</p>
+      <p class="text-sm text-slate-600 mt-2">{{$a.InterestRate.APRJustification}}</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-5 sm:col-span-2">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">EMI ceiling</p>
+      <p class="mt-2 text-2xl font-bold">₹{{inr $a.EMICeiling.Ceiling}}/month</p>
+      <p class="text-sm text-slate-600 mt-2">{{$a.EMICeiling.Justification}}</p>
+      <div class="grid sm:grid-cols-2 gap-3 mt-4">
+        <div class="rounded-lg bg-slate-50 p-3 text-sm">
+          <p class="font-medium text-slate-700">Stress test: {{$a.EMICeiling.StressIncomeDrop20.Description}}</p>
+          <p class="text-slate-600 mt-1">{{$a.EMICeiling.StressIncomeDrop20.Note}}</p>
+        </div>
+        <div class="rounded-lg bg-slate-50 p-3 text-sm">
+          <p class="font-medium text-slate-700">Stress test: {{$a.EMICeiling.StressRateUp2.Description}}</p>
+          <p class="text-slate-600 mt-1">{{$a.EMICeiling.StressRateUp2.Note}}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="print-card bg-white rounded-xl shadow-sm p-6 border-2 border-slate-900">
+    <div class="flex items-center justify-between no-print mb-3">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Negotiation card</p>
+      <button onclick="window.print()" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-100">Print</button>
+    </div>
+    <h2 class="text-lg font-bold">Negotiation card &middot; {{$p.Purpose}} loan, ₹{{inr $p.AmountWanted}}</h2>
+    <p class="text-sm text-slate-500 mb-3">Hold this up to your bank manager: "Your quote is X%, but my profile justifies {{printf "%.1f" $a.InterestRate.LowPercent}}%-{{printf "%.1f" $a.InterestRate.HighPercent}}% because of the following."</p>
+    <ul class="list-disc list-inside space-y-1.5 text-sm text-slate-800">
+      {{range $a.NegotiationPoints}}<li>{{.}}</li>{{end}}
+    </ul>
+  </div>
+
+  <div class="no-print">
+    <a href="/" class="text-sm text-slate-500 underline">Start over</a>
+  </div>
+</div>
+{{end}}

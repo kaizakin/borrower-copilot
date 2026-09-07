@@ -2,6 +2,11 @@ package engine
 
 import "strconv"
 
+// FormatINR renders a number using the Indian digit-grouping convention
+// (last 3 digits, then groups of 2), e.g. 1100000 -> "11,00,000". Exported
+// for use by the web layer's templates.
+func FormatINR(n float64) string { return formatINR(n) }
+
 // formatINR renders a number using the Indian digit-grouping convention
 // (last 3 digits, then groups of 2), e.g. 1100000 -> "11,00,000".
 func formatINR(n float64) string {

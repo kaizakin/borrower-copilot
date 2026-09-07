@@ -1,0 +1,59 @@
+{{define "index.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrower Copilot</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+<div class="max-w-2xl mx-auto px-4 py-10">
+  <header class="mb-8">
+    <h1 class="text-2xl font-bold">Borrower Copilot</h1>
+    <p class="text-slate-600 mt-1">Work out what you can actually afford to borrow before you approach a lender. Nothing you enter is stored anywhere -- it only ever travels in this form.</p>
+  </header>
+
+  <div id="content">
+    {{template "core_form" .}}
+  </div>
+</div>
+</body>
+</html>
+{{end}}
+
+{{define "core_form"}}
+<form hx-post="/additional" hx-target="#content" hx-swap="innerHTML" class="space-y-5 bg-white rounded-xl shadow-sm p-6">
+  <p class="text-sm font-medium text-slate-500">Step 1 of 2 &middot; the essentials</p>
+
+  {{range .Questions}}{{template "core_field" .}}{{end}}
+
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit"
+      class="bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-700">
+      Continue
+    </button>
+    <button type="submit" hx-post="/assess" hx-target="#content" hx-swap="innerHTML"
+      class="border border-slate-300 px-4 py-2 rounded-lg font-medium text-slate-700 hover:bg-slate-100">
+      Get a quick assessment now
+    </button>
+  </div>
+  <p class="text-xs text-slate-400">"Get a quick assessment now" skips the follow-up questions -- you'll get wide ranges flagged as low-confidence instead of ones tuned to your credit history and risk profile.</p>
+</form>
+{{end}}
+
+{{define "core_field"}}
+<label class="block">
+  <span class="block text-sm font-medium mb-1">{{.Label}}{{if .Unit}} <span class="text-slate-400 font-normal">({{.Unit}})</span>{{end}}</span>
+  {{if .Help}}<span class="block text-xs text-slate-500 mb-1">{{.Help}}</span>{{end}}
+  {{if eq .Kind "select"}}
+    <select name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white" required>
+      <option value="" disabled selected>Choose...</option>
+      {{range .Options}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+    </select>
+  {{else}}
+    <input type="number" step="any" min="0" name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2" required>
+  {{end}}
+</label>
+{{end}}
