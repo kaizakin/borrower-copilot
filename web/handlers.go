@@ -8,7 +8,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"lokta-assignment/engine"
+	"github.com/kaizakin/borrower-copilot/engine"
 )
 
 //go:embed templates/*.html

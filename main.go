@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"lokta-assignment/web"
+	"github.com/kaizakin/borrower-copilot/web"
 )
 
 func main() {

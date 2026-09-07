@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"lokta-assignment/engine"
+	"github.com/kaizakin/borrower-copilot/engine"
 )
 
 func formFloat(r *http.Request, key string) float64 {
