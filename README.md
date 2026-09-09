@@ -6,6 +6,9 @@ For the input, output, and reasoning behind each of the three sample borrowers, 
 
 The app is stateless. The browser sends the form payload back and forth through `web/handlers.go`, and there is no database.
 
+
+https://github.com/user-attachments/assets/91a1a435-ce49-4052-b93b-93fe9a61330b
+
 ## Running it
 
 ```
