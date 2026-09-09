@@ -126,6 +126,15 @@ type EMICeilingResult struct {
 	StressRateUp2       StressScenario
 }
 
+// LeverResult is one counterfactual path to affording the requested loan:
+// a single change to the borrower's profile, holding everything else
+// constant, and what it does to the verdict and safe capacity.
+type LeverResult struct {
+	Lever      string // short label, e.g. "Reduce existing EMIs"
+	Note       string // the concrete change and its effect, in rupees/points
+	Achievable bool   // true if this change alone flips the verdict to Borrow
+}
+
 // Assessment is the engine's complete, deterministic output for a Profile.
 type Assessment struct {
 	Verdict       VerdictResult
@@ -142,4 +151,9 @@ type Assessment struct {
 	RoutingReason      string
 
 	NegotiationPoints []string
+
+	// PathToYes lists independent changes -- one at a time -- that would
+	// let safe capacity cover AmountWanted. Populated only when Verdict
+	// isn't already Borrow; nil otherwise.
+	PathToYes []LeverResult
 }

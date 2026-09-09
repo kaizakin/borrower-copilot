@@ -163,6 +163,68 @@ func TestEMIAndMaxPrincipalAreInverses(t *testing.T) {
 	}
 }
 
+func TestPriya_BorrowVerdictHasNoPathToYes(t *testing.T) {
+	a := Assess(priya())
+	if len(a.PathToYes) != 0 {
+		t.Errorf("expected no counterfactual levers when the plain verdict is already Borrow, got %v", a.PathToYes)
+	}
+}
+
+func TestRavi_PathToYesOffersCreditScoreAndSavingsLevers(t *testing.T) {
+	a := Assess(ravi())
+	if len(a.PathToYes) == 0 {
+		t.Fatal("expected Ravi (Borrow less) to get at least one counterfactual lever")
+	}
+	var haveCredit, haveSavings, haveSecured bool
+	for _, l := range a.PathToYes {
+		switch l.Lever {
+		case "Improve credit score":
+			haveCredit = true
+		case "Build emergency savings":
+			haveSavings = true
+		case "Switch to secured lending":
+			haveSecured = true
+		}
+	}
+	if !haveCredit {
+		t.Error("expected a credit-score lever: Ravi has no credit score on file")
+	}
+	if !haveSavings {
+		t.Error("expected a savings lever: Ravi has no emergency savings on file")
+	}
+	if haveSecured {
+		t.Error("Ravi is already auto-routed to a secured product -- the secured lever has nothing left to offer")
+	}
+}
+
+func TestAnita_PathToYesIncludesReduceEMILever(t *testing.T) {
+	// Anita's rate band is widened both by her unknown credit score and by
+	// her bounce, so even zeroing her ₹9,000/month of existing EMIs alone
+	// isn't quite enough for her ₹1.5L ask -- the lever should say so
+	// honestly (Achievable: false) rather than overclaim, while still
+	// reporting how far it gets her.
+	a := Assess(anita())
+	var lever *LeverResult
+	for i := range a.PathToYes {
+		if a.PathToYes[i].Lever == "Reduce existing EMIs" {
+			lever = &a.PathToYes[i]
+		}
+	}
+	if lever == nil {
+		t.Fatal("expected a 'Reduce existing EMIs' lever for Anita, who has ₹9,000/month of existing EMIs")
+	}
+	if lever.Achievable {
+		t.Errorf("expected cutting existing EMIs alone not to fully close Anita's gap (rate band is also widened by her bounce), got achievable: %s", lever.Note)
+	}
+
+	withoutEMI := anita()
+	withoutEMI.ExistingEMIs = 0
+	improved := Assess(withoutEMI)
+	if improved.MaxAmount.SafeCapacityLimit <= 0 {
+		t.Error("expected zeroing existing EMIs to at least raise Anita's safe capacity above zero")
+	}
+}
+
 func TestUnknownCreditScoreWidensNotAverages(t *testing.T) {
 	known := priya()
 	unknown := priya()

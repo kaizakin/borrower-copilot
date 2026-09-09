@@ -6,15 +6,57 @@ import (
 	"strings"
 )
 
-// Assess is the engine's single entry point: a pure, deterministic
-// function from a Profile to an Assessment.
-func Assess(p Profile) Assessment {
+// coreCalc is the arithmetic shared by the headline Assessment and by
+// lever search (pathtoyes.go): pooled income, FOIR, rate band, and the
+// resulting EMI ceiling and safe capacity for one profile. Factoring it
+// out means scoring a hypothetical "what if" profile never duplicates
+// Assess's math.
+type coreCalc struct {
+	income       float64
+	incomeNotes  []string
+	foir         foirResult
+	secured      bool
+	low, high    float64
+	wide         bool
+	rateNotes    []string
+	emiCeiling   float64
+	safeCapacity float64
+}
+
+func computeCore(p Profile) coreCalc {
 	income, incomeNotes := pooledIncome(p)
 	foir := borrowerFOIR(p)
 
 	hasCollateral := p.CollateralValue != nil && *p.CollateralValue > 0
 	requestedSecured := p.LoanType == LoanSecured
 	secured := requestedSecured || (hasCollateral && p.Employment != EmploymentSalaried)
+
+	low, high, wide, rateNotes := rateBand(p, secured)
+
+	foirEMI := income*foir.Percent/100 - p.ExistingEMIs
+	residual := income - p.HouseholdExpenses - p.ExistingEMIs
+	residualEMI := residual * residualSafetyFactor
+	emiCeiling := math.Min(foirEMI, residualEMI)
+	if emiCeiling < 0 {
+		emiCeiling = 0
+	}
+	safeCapacity := MaxPrincipal(emiCeiling, high, p.TenureMonths)
+
+	return coreCalc{
+		income: income, incomeNotes: incomeNotes,
+		foir: foir, secured: secured,
+		low: low, high: high, wide: wide, rateNotes: rateNotes,
+		emiCeiling: emiCeiling, safeCapacity: safeCapacity,
+	}
+}
+
+// Assess is the engine's single entry point: a pure, deterministic
+// function from a Profile to an Assessment.
+func Assess(p Profile) Assessment {
+	c := computeCore(p)
+
+	hasCollateral := p.CollateralValue != nil && *p.CollateralValue > 0
+	requestedSecured := p.LoanType == LoanSecured
 
 	routed := false
 	routingReason := ""
@@ -26,46 +68,40 @@ func Assess(p Profile) Assessment {
 		)
 	}
 
-	low, high, wide, rateNotes := rateBand(p, secured)
-	midRate := (low + high) / 2
+	midRate := (c.low + c.high) / 2
 	// Quote APR at the conservative (upper) edge of the band -- the rate a
 	// borrower should plan around until a lender proves otherwise.
-	apr := APR(p.AmountWanted, high, processingFeePercent, p.TenureMonths)
+	apr := APR(p.AmountWanted, c.high, processingFeePercent, p.TenureMonths)
 
-	foirEMI := income*foir.Percent/100 - p.ExistingEMIs
-	residual := income - p.HouseholdExpenses - p.ExistingEMIs
+	foirEMI := c.income*c.foir.Percent/100 - p.ExistingEMIs
+	residual := c.income - p.HouseholdExpenses - p.ExistingEMIs
 	residualEMI := residual * residualSafetyFactor
-	emiCeiling := math.Min(foirEMI, residualEMI)
 	ceilingDriver := "your FOIR limit"
 	if residualEMI < foirEMI {
 		ceilingDriver = "what's left after your household expenses"
 	}
-	if emiCeiling < 0 {
-		emiCeiling = 0
-	}
 	emiJustification := fmt.Sprintf(
 		"your EMI ceiling is ₹%s/month because %s caps it there (income ₹%s, FOIR %.0f%%, existing EMIs ₹%s, household expenses ₹%s)",
-		formatINR(emiCeiling), ceilingDriver, formatINR(income), foir.Percent, formatINR(p.ExistingEMIs), formatINR(p.HouseholdExpenses),
+		formatINR(c.emiCeiling), ceilingDriver, formatINR(c.income), c.foir.Percent, formatINR(p.ExistingEMIs), formatINR(p.HouseholdExpenses),
 	)
 
-	stressIncome := stressScenario(income*0.8, p.HouseholdExpenses, p.ExistingEMIs, foir.Percent, midRate, p.TenureMonths, p.AmountWanted, "your income drops 20%")
-	stressRate := stressScenario(income, p.HouseholdExpenses, p.ExistingEMIs, foir.Percent, midRate+2, p.TenureMonths, p.AmountWanted, "rates rise 2 points")
+	stressIncome := stressScenario(c.income*0.8, p.HouseholdExpenses, p.ExistingEMIs, c.foir.Percent, midRate, p.TenureMonths, p.AmountWanted, "your income drops 20%")
+	stressRate := stressScenario(c.income, p.HouseholdExpenses, p.ExistingEMIs, c.foir.Percent, midRate+2, p.TenureMonths, p.AmountWanted, "rates rise 2 points")
 
-	safeCapacity := MaxPrincipal(emiCeiling, high, p.TenureMonths)
 	safeJustification := fmt.Sprintf(
 		"this is the most you can safely repay: it converts your ₹%s/month EMI ceiling into a loan amount at the conservative %.1f%% edge of your rate band over %d months",
-		formatINR(emiCeiling), high, p.TenureMonths,
+		formatINR(c.emiCeiling), c.high, p.TenureMonths,
 	)
 
 	bf := bankFOIR(p)
-	bankEMI := income*bf/100 - p.ExistingEMIs
+	bankEMI := c.income*bf/100 - p.ExistingEMIs
 	if bankEMI < 0 {
 		bankEMI = 0
 	}
 	sanctionLimit := MaxPrincipal(bankEMI, midRate, p.TenureMonths)
 	sanctionJustification := fmt.Sprintf(
 		"a bank applying its typical %.0f%% FOIR for %s applicants to your ₹%s pooled income would sanction up to this, before it ever checks your household expenses",
-		bf, employmentLabel(p.Employment), formatINR(income),
+		bf, employmentLabel(p.Employment), formatINR(c.income),
 	)
 	if hasCollateral {
 		ltvLimit := *p.CollateralValue * collateralLTV
@@ -78,7 +114,7 @@ func Assess(p Profile) Assessment {
 		}
 	}
 
-	verdict := computeVerdict(p, income, emiCeiling, safeCapacity)
+	verdict := computeVerdict(p, c.income, c.emiCeiling, c.safeCapacity)
 
 	confidence := ConfidenceHigh
 	confidenceNote := "core and additional questions answered; ranges reflect your specific risk profile"
@@ -87,32 +123,39 @@ func Assess(p Profile) Assessment {
 		confidenceNote = "only the core questions were answered -- ranges are wide because credit score, income stability, and repayment history are all unknown; answer the additional questions to narrow them"
 	}
 
-	allNotes := append(append([]string{}, incomeNotes...), foir.Notes...)
-	negotiationPoints := buildNegotiationPoints(p, low, high, apr, safeCapacity, emiCeiling, rateNotes, allNotes)
+	allNotes := append(append([]string{}, c.incomeNotes...), c.foir.Notes...)
+	negotiationPoints := buildNegotiationPoints(p, c.low, c.high, apr, c.safeCapacity, c.emiCeiling, c.rateNotes, allNotes)
+
+	var pathToYes []LeverResult
+	if verdict.Verdict != VerdictBorrow {
+		// Only worth searching for a path when the plain answer isn't
+		// already yes.
+		pathToYes = findLevers(p)
+	}
 
 	return Assessment{
 		Verdict: verdict,
 		MaxAmount: MaxAmountResult{
 			SanctionLimit:             sanctionLimit,
 			SanctionJustification:    sanctionJustification,
-			SafeCapacityLimit:        safeCapacity,
+			SafeCapacityLimit:        c.safeCapacity,
 			SafeCapacityJustification: safeJustification,
 			Recommended:              "safe capacity",
 			RecommendationReason:     "always anchor to the Safe Capacity Limit -- the Sanction Limit only reflects what a bank's formula allows, not what your actual cash flow (after rent, groceries, and existing EMIs) can sustain",
 		},
 		InterestRate: InterestRateResult{
-			LowPercent:        low,
-			HighPercent:       high,
-			BandJustification: strings.Join(rateNotes, "; "),
+			LowPercent:        c.low,
+			HighPercent:       c.high,
+			BandJustification: strings.Join(c.rateNotes, "; "),
 			AllInAPR:          apr,
 			APRJustification: fmt.Sprintf(
 				"at the %.1f%% conservative edge of your band plus a standard %.0f%% processing fee, the true annualised cost (APR) on a ₹%s loan over %d months is %.1f%%, not %.1f%%",
-				high, processingFeePercent, formatINR(p.AmountWanted), p.TenureMonths, apr, high,
+				c.high, processingFeePercent, formatINR(p.AmountWanted), p.TenureMonths, apr, c.high,
 			),
-			Wide: wide,
+			Wide: c.wide,
 		},
 		EMICeiling: EMICeilingResult{
-			Ceiling:            emiCeiling,
+			Ceiling:            c.emiCeiling,
 			Justification:      emiJustification,
 			StressIncomeDrop20: stressIncome,
 			StressRateUp2:      stressRate,
@@ -123,6 +166,7 @@ func Assess(p Profile) Assessment {
 		RecommendedProduct: recommendedProductFor(p, routed),
 		RoutingReason:      routingReason,
 		NegotiationPoints:  negotiationPoints,
+		PathToYes:          pathToYes,
 	}
 }
 
