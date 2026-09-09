@@ -5,14 +5,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Borrower Copilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+</style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
-<div class="max-w-2xl mx-auto px-4 py-10">
-  <header class="mb-8">
-    <h1 class="text-2xl font-bold">Borrower Copilot</h1>
-    <p class="text-slate-600 mt-1">Work out what you can actually afford to borrow before you approach a lender. Nothing you enter is stored anywhere -- it only ever travels in this form.</p>
+<body class="min-h-screen text-slate-900 bg-gradient-to-b from-indigo-50 via-white to-white">
+<div class="max-w-2xl mx-auto px-4 py-10 sm:py-14">
+  <header class="mb-8 flex items-start gap-3">
+    <div class="shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 shadow-sm flex items-center justify-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-2xl font-extrabold tracking-tight">Borrower Copilot</h1>
+      <p class="text-slate-600 mt-1 text-sm sm:text-base">Work out what you can actually afford to borrow before you approach a lender. Nothing you enter is stored anywhere &mdash; it only ever travels in this form.</p>
+    </div>
   </header>
 
   <div id="content">
@@ -23,23 +36,40 @@
 </html>
 {{end}}
 
+{{define "step_indicator"}}
+<div class="flex items-center gap-2 mb-2">
+  {{if eq . 1}}
+  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">1</span>
+  <div class="h-1 flex-1 rounded-full bg-indigo-600"></div>
+  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold">2</span>
+  {{else}}
+  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">&#10003;</span>
+  <div class="h-1 flex-1 rounded-full bg-indigo-600"></div>
+  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">2</span>
+  {{end}}
+</div>
+{{end}}
+
 {{define "core_form"}}
-<form hx-post="/additional" hx-target="#content" hx-swap="innerHTML" class="space-y-5 bg-white rounded-xl shadow-sm p-6">
-  <p class="text-sm font-medium text-slate-500">Step 1 of 2 &middot; the essentials</p>
+<form hx-post="/additional" hx-target="#content" hx-swap="innerHTML" class="space-y-5 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 sm:p-8">
+  <div>
+    {{template "step_indicator" 1}}
+    <p class="text-sm font-medium text-slate-500">Step 1 of 2 &middot; the essentials</p>
+  </div>
 
   {{range .Questions}}{{template "core_field" .}}{{end}}
 
   <div class="flex flex-wrap gap-3 pt-2">
     <button type="submit"
-      class="bg-slate-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-700">
+      class="bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm hover:bg-indigo-500 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
       Continue
     </button>
     <button type="submit" hx-post="/assess" hx-target="#content" hx-swap="innerHTML"
-      class="border border-slate-300 px-4 py-2 rounded-lg font-medium text-slate-700 hover:bg-slate-100">
+      class="border border-slate-300 px-4 py-2.5 rounded-lg font-medium text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2">
       Get a quick assessment now
     </button>
   </div>
-  <p class="text-xs text-slate-400">"Get a quick assessment now" skips the follow-up questions -- you'll get wide ranges flagged as low-confidence instead of ones tuned to your credit history and risk profile.</p>
+  <p class="text-xs text-slate-400">"Get a quick assessment now" skips the follow-up questions &mdash; you'll get wide ranges flagged as low-confidence instead of ones tuned to your credit history and risk profile.</p>
 </form>
 {{end}}
 
@@ -48,12 +78,12 @@
   <span class="block text-sm font-medium mb-1">{{.Label}}{{if .Unit}} <span class="text-slate-400 font-normal">({{.Unit}})</span>{{end}}</span>
   {{if .Help}}<span class="block text-xs text-slate-500 mb-1">{{.Help}}</span>{{end}}
   {{if eq .Kind "select"}}
-    <select name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white" required>
+    <select name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 bg-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required>
       <option value="" disabled selected>Choose...</option>
       {{range .Options}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
     </select>
   {{else}}
-    <input type="number" step="any" min="0" name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2" required>
+    <input type="number" step="any" min="0" name="{{.ID}}" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required>
   {{end}}
 </label>
 {{end}}
