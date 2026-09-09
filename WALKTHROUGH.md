@@ -1,83 +1,52 @@
-# WALKTHROUGH.md — Borrower Copilot
+# Persona walkthroughs
 
-How to run, the three persona run-throughs with actual engine output, what was cut for time, and the limitations of the hardcoded assumptions baked into `RULES.md`.
+These examples show the inputs and results for Priya, Ravi, and Anita.
 
-## Running it
+## Persona 1: Priya, 29, Bengaluru, salaried
 
-```
-go run .
-```
-
-Then open `http://localhost:8080`. `go test ./...` runs the rules-engine unit tests, including the three personas below as automated regression tests (`engine/engine_test.go`).
-
-The flow is a two-tier HTMX wizard: tier 1 (the 9 core questions, `POST /additional`) always renders; tier 2 (`POST /assess`) adaptively shows only the additional questions that are still relevant to the borrower's employment type and requested amount (see `engine.AdditionalQuestions`). A "Get a quick assessment now" button on tier 1 skips straight to `/assess`, producing the wide, low-confidence range the spec calls for.
-
----
-
-## Persona 1 — Priya (29, Bengaluru, salaried)
-
-**Input:** salaried, ₹1,10,000/month net, car EMI ₹14,000, rent ₹28,000, CIBIL 780, wants ₹8,00,000 personal loan. *Tenure isn't part of the original narrative — 36 months is assumed as a typical personal-loan tenure, since neither the EMI nor the APR formula is computable without one (see RULES.md's non-goals note on this).*
+**Input.** Salaried, ₹1,10,000/month net, car EMI ₹14,000, rent ₹28,000, CIBIL 780, seeking an ₹8,00,000 personal loan. *The original narrative does not specify a tenure. This uses 36 months, a typical personal-loan term, because the EMI and APR cannot be calculated without one. See the non-goals note in `RULES.md`.*
 
 **Output:**
-- **Verdict: Borrow** — "your safe capacity of ₹12,52,340 comfortably covers the ₹8,00,000 you want"
-- **Max amount:** Safe Capacity ₹12,52,340 · Sanction Limit ₹12,66,030 (recommend using the Safe Capacity Limit)
-- **Fair rate:** 9.5%–11.0% (tightened for her 780 CIBIL), all-in APR **6.7%** on the ₹8L loan
-- **EMI ceiling:** ₹41,000/month, driven by her FOIR (50% = 45% salaried base + 5 for good credit)
-- **Stress tests:** both a 20% income drop and a 2-point rate rise still leave her ceiling above the ₹25,908–26,667 EMI this loan needs
+- **Verdict: Borrow.** "Your safe capacity of ₹12,52,340 comfortably covers the ₹8,00,000 you want."
+- **Maximum amount.** Safe Capacity ₹12,52,340. Sanction Limit ₹12,66,030. The recommendation uses the Safe Capacity Limit.
+- **Fair rate.** 9.5% to 11.0%, tightened for her 780 CIBIL score. The all-in APR on the ₹8L loan is **6.7%**.
+- **EMI ceiling.** ₹41,000/month, based on a 50% FOIR. That is the 45% salaried base plus 5 points for good credit.
+- **Stress tests.** A 20% income drop and a 2-point rate rise both leave her ceiling above the ₹25,908 to ₹26,667 EMI required for this loan.
 
-This is the comfortable case: good credit, verifiable salary, existing obligations well within her means. The engine correctly does not route her anywhere else or flag low confidence (she answered her credit score).
+This is a comfortable case. She has good credit, a verifiable salary, and manageable existing obligations. The engine does not route her to another product or mark the result as low confidence because she provided her credit score.
 
-## Persona 2 — Ravi (42, Mysuru, self-employed)
+## Persona 2: Ravi, 42, Mysuru, self-employed
 
-**Input:** self-employed kirana owner, cash income ₹40,000–80,000/month, ITR ₹4.2L/year, unencumbered shop worth ₹45,00,000, no credit score, wife earns ₹18,000, wants ₹15,00,000 for business/vehicle.
+**Input.** Self-employed kirana owner, cash income of ₹40,000 to ₹80,000/month, ITR of ₹4.2L/year, unencumbered shop worth ₹45,00,000, no credit score, wife earns ₹18,000, seeking ₹15,00,000 for a business or vehicle.
 
-**Judgement calls made to build this Profile:**
-- **Declared income:** used the ₹40k–80k midpoint (₹60,000) as `NetMonthlyIncome`, and modelled roughly 40% of it as unverifiable cash on top of his provable ITR base (`VariableIncomeShare = 0.4`) — his ITR of ₹4.2L/yr (₹35,000/month) is close to the "stable" 60% of ₹60,000. A real underwriter would likely anchor to the ITR figure alone; this copilot instead shows the borrower what his own claimed income supports, discounted for the part he can't prove.
-- **Household expenses (₹25,000/month)** and **existing EMIs (₹0)** are not stated in the narrative and are estimation gaps — a real deployment would ask, not assume.
-- Wife's ₹18,000 income modelled as a co-applicant.
-
-**Output:**
-- **Routed:** yes — "as a self-employed applicant without an established credit score, an unsecured business loan is unlikely to be sanctioned at a fair rate; securing it against your ₹45,00,000 asset (loan-against-property/gold) instead unlocks a far lower, safer rate." **Recommended product: secured.**
-- **Verdict: Borrow less** — safe capacity ₹8,06,385 against the ₹15,00,000 asked
-- **Fair rate:** 9.0%–11.0% secured band (not the 30%+ unsecured band he'd otherwise face with no credit score)
-- **EMI ceiling:** ₹26,400/month
-- **Stress tests:** at his requested ₹15L amount, both stress scenarios fail — the copilot is explicit that the full ask does not survive a 20% income drop or a 2-point rate rise, reinforcing "borrow less" rather than the full amount
-
-This is the case the assignment specifically asked for: an asset-rich, credit-invisible borrower who should never be quoted an unsecured rate, and whose true safe amount is well below what he's asking for even once routed correctly.
-
-## Persona 3 — Anita (35, Hubballi, informal)
-
-**Input:** informal delivery/tailoring income ₹26,000–30,000/month, 2 kids, 3 outstanding app loans (₹35,000 principal at 30%+), 1 bounced EMI last month, wants ₹1,50,000 for an EV scooter.
-
-**Judgement calls made to build this Profile:**
-- **Income:** midpoint ₹28,000.
-- **Existing EMIs (₹9,000/month):** the narrative gives a principal (₹35,000 across 3 app loans) and a rate ("30%+"), not a monthly repayment figure — ₹9,000 is an estimated combined instalment for short-tenure, high-cost app loans of that size. A real tool would ask for this directly rather than infer it.
-- **Household expenses (₹16,000/month)** for her and 2 kids is likewise an estimation gap, not stated in the narrative.
+**Judgment calls used for this profile.**
+- **Declared income.** The ₹40k to ₹80k midpoint, ₹60,000, is used as `NetMonthlyIncome`. About 40% is treated as unverifiable cash above his provable ITR income (`VariableIncomeShare = 0.4`). His ₹4.2L/year ITR, or ₹35,000/month, is close to the stable 60% of ₹60,000. A real underwriter would probably rely on the ITR alone. This copilot instead shows what his claimed income could support after discounting the unverified share.
+- **Household expenses of ₹25,000/month** and **existing EMIs of ₹0** are not in the narrative, so they are estimates. A real product would ask for them.
+- His wife's ₹18,000 income is modeled as co-applicant income.
 
 **Output:**
-- **Verdict: Don't borrow** — "you've missed a payment in the last 3 months and your safe EMI ceiling is only ₹0 — taking on more debt now risks another bounce and further credit damage"
-- **EMI ceiling: ₹0/month.** Her FOIR bottoms out at the 20% floor (30% informal base − 10 for the bounce), and 20% of ₹28,000 doesn't even cover her existing ₹9,000/month app-loan burden.
-- **Max amount:** Safe Capacity ₹0. Sanction Limit still shown (₹13,795, what a bank's looser formula alone would say) — precisely to make the point that a bank's number can look survivable while the borrower's actual budget says otherwise.
-- **Fair rate:** 22%–46% (informal base 24–36%, widened further for no credit score and the bounce) — deliberately in the same range as the app loans she's already stuck in.
-- **Confidence: high**, even though only one additional question (bounce history) was answered — see `RULES.md` rule 38: disclosing even one high-impact risk factor is enough to stop the engine from defaulting to the flat "only core answered" low-confidence fallback.
+- **Routed.** Yes. "As a self-employed applicant without an established credit score, an unsecured business loan is unlikely to be sanctioned at a fair rate. Securing it against your ₹45,00,000 asset, through a loan against property or gold, unlocks a much lower rate." **Recommended product: secured.**
+- **Verdict: Borrow less.** Safe capacity is ₹8,06,385, against the ₹15,00,000 requested.
+- **Fair rate.** 9.0% to 11.0% for the secured product, instead of the 30%+ unsecured band he would likely face without a credit score.
+- **EMI ceiling.** ₹26,400/month.
+- **Stress tests.** At the requested ₹15L, both scenarios fail. The full amount does not hold up to a 20% income drop or a 2-point rate rise, which supports the "borrow less" recommendation.
 
-This is the "actively tell high-risk profiles not to borrow" case the assignment calls out by name, and it's the one persona where the Sanction Limit and Safe Capacity Limit genuinely diverge — showing why the tool insists on recommending the safe number, not the bank's.
+This is the asset-rich borrower with no credit history that the assignment asks for. He should not be quoted an unsecured rate, and his safe amount is well below what he requested even after the correct routing.
 
----
+## Persona 3: Anita, 35, Hubballi, informal
 
-## What got cut for time
+**Input.** Informal delivery and tailoring income of ₹26,000 to ₹30,000/month, two children, three outstanding app loans with ₹35,000 principal at 30%+, one bounced EMI last month, seeking ₹1,50,000 for an EV scooter.
 
-- **No automated HTTP-layer tests** — the three personas are covered by `engine` unit tests (pure functions, easy to assert on) and were manually smoke-tested end-to-end through the real HTTP/HTMX routes via `curl` during development, but there's no `httptest`-based test suite for `web/handlers.go` itself.
-- **No PDF export** for the negotiation card — it relies on the browser's native print/"Save as PDF" dialog (`window.print()` with a `@media print` stylesheet), not a generated PDF file.
-- **No live rate/policy feed** — every rate band, FOIR number, and LTV is a static constant (see `RULES.md`). A production version would need these calibrated against, and periodically refreshed from, actual lender data.
-- **No product-specific pricing tables** — e.g. subsidised government schemes for small business loans (which could matter a great deal for Ravi), education-loan-specific terms, or vehicle-loan-specific LTV rules are all out of scope; every non-salaried, non-secured request is priced through one generic band per employment type.
-- **No inline client-side validation** beyond HTML5 `required`/`number` attributes — no debounced field-level error messages, no guardrails against a borrower typing an obviously wrong number (e.g. income of ₹1).
-- **No accessibility audit** beyond using semantic `<label>`/`<select>`/`<input>` elements — no screen-reader testing was performed.
-- **English only** — no regional-language support, despite the product targeting borrowers across India.
+**Judgment calls used for this profile.**
+- **Income.** The midpoint is ₹28,000.
+- **Existing EMIs of ₹9,000/month.** The narrative gives principal, ₹35,000 across three app loans, and a rate of 30%+, but not a monthly repayment. ₹9,000 is an estimated combined instalment for short-term, high-cost loans of that size. A real tool would ask directly instead of inferring it.
+- **Household expenses of ₹16,000/month** for her and two children are also an estimate, not part of the narrative.
 
-## Limitations of the hardcoded financial assumptions
+**Output:**
+- **Verdict: Don't borrow.** "You've missed a payment in the last 3 months and your safe EMI ceiling is only ₹0. Taking on more debt now risks another bounce and further credit damage."
+- **EMI ceiling: ₹0/month.** Her FOIR falls to its 20% floor, the 30% informal base less 10 points for the bounce. Twenty percent of ₹28,000 does not cover her existing ₹9,000/month app-loan payments.
+- **Maximum amount.** Safe Capacity is ₹0. The Sanction Limit is still shown as ₹13,795, which is what a bank's looser formula would say. This shows how a bank's number can look manageable while the borrower's actual budget says otherwise.
+- **Fair rate.** 22% to 46%. The informal base is 24% to 36%, widened for no credit score and the bounce. It is in the same range as the app loans she already has.
+- **Confidence: high.** Only one additional question, bounce history, was answered. Under rule 38 in `RULES.md`, one disclosed high-impact risk factor keeps the engine from using its flat low-confidence fallback for core answers only.
 
-- **Every FOIR percentage, rate band, and LTV in `RULES.md` is a judgement call, not a fetched or regulator-mandated number.** RBI does not itself fix a single FOIR; the 40–50%/60%/30% figures in the assignment brief are industry rules of thumb, and this engine's specific point values within those ranges (the credit-score/bounce/high-income adjustments, the exact rate bands) are reasonable but ultimately invented for this assignment. They should be treated as a starting calibration to be validated against real lender data before anyone relies on the exact numbers, not as ground truth.
-- **The given APR formula can understate cost for long reducing-balance tenures.** `APR = ((Total Interest + Fees) / Principal) × (365 / Tenure in Days) × 100` was implemented exactly as specified. But because a reducing-balance loan's total interest is much smaller than `rate × years × principal` (the outstanding balance shrinks every month), this formula — which the spec ties to a 2% processing fee disclosure — actually produces an APR *below* the nominal rate over multi-year tenures (see `engine/engine_test.go`'s `TestAPRIncludesProcessingFee`, which had to be written to assert "a fee raises APR relative to no fee" rather than "APR exceeds the nominal rate," because the latter isn't true in general for this formula). It's implemented faithfully to the spec, but this is a real mathematical quirk worth flagging rather than quietly hiding.
-- **All three personas required translating narrative ranges into single point figures** (Ravi's ₹40k–80k cash income, Anita's ₹26k–30k income and her app-loan repayment burden) — the judgement calls made are documented above and in `engine/engine_test.go`'s comments. A production tool should ask for these directly instead of a developer guessing on the borrower's behalf.
-- **Nothing is verified.** Credit score, income, existing EMIs, and collateral value are all self-reported and untrusted by construction — this is a self-assessment aid to prepare for a negotiation, not a substitute for a lender's actual underwriting, and the copy on the page says as much.
+This is the "actively tell high-risk profiles not to borrow" case named in the assignment. It is also the only persona where the Sanction Limit and Safe Capacity Limit meaningfully diverge. That is why the tool recommends the safe number, not the bank's number.
